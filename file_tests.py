@@ -1,6 +1,12 @@
 import io
+import pathlib
+import collections
+from pathlib import Path
 import unittest
+import os
 
+# 与文件相关的各种操作在 os.path 里提供了各种方法；
+# 在 3.4.0 之后，建议使用 pathlib.Path 操作目录和文件，使用更方便
 # 可以通过内置的 open 函数来访问文件，该函数返回一个 file object 对象（<class '_io.TextIOWrapper'>）
 class FileTests(unittest.TestCase):
 
@@ -149,6 +155,212 @@ class FileTests(unittest.TestCase):
         # 前面提到过 list(f) 等效于 f.readline()，所以也可以见到以下这样的写法
         for line in list(f):
             print(line)
+
+    def test_get_current_work_dir(self):
+        """测试获取当前工作目录的几种方式以及相互之间的比较
+        """
+        # 获得当前工作目录
+        p1 = Path.cwd()  # Output: PosixPath('/Users/ktgu/workspace/projects/python-demos')
+
+        # 使用构造函数传入空字符串或 '.' 表示的也是当前工作目录
+        # 只是他们返回的是相对路径
+        p2 = Path()  # PosixPath('.')
+        p3 = Path('.') # PosixPath('.')
+
+        # repr 和 str 输出的字符是不一样的，repr 更具表达性
+        self.assertEqual("PosixPath('.')", repr(p2))
+        self.assertEqual(".", str(p2))
+
+        # 断言：p2,p3 都是相对路径
+        self.assertFalse(p2.is_absolute())
+        self.assertFalse(p3.is_absolute())
+
+        # 两个表示同一个路径的相对地址比较是相等的，但是表示同一个目录的相对路径和绝对的路径比较是不等的
+        self.assertEqual(p2, p3)
+        self.assertNotEqual(p2, p1)
+        # 但是转换为绝对地址就可以比较了
+        self.assertEqual(p1, p2.absolute())
+
+    def test_get_user_home_dir(self):
+        """获取用户 home 目录"""
+        # 调用类方法 home,构造用户的 home dir 路径实例
+        p1 = Path.home()  # PosixPath('/Users/ktgu')
+        # 该方法是通过 os.path.expanduser('~') 返回的，但是该方法返回值是 str 类型
+        p2 = os.path.expanduser('~')
+        self.assertEqual('/Users/ktgu', p2)
+
+        # 虽然两个指向的路径系统，但两个变量的类型不同
+        self.assertNotEqual(p1, p2)
+        # 如果要比较，需要将类型转换一致
+        self.assertEqual(p1, Path(p2))
+
+    def test_get_path_base_user_home_dir(self):
+        """获取基于 user home 的路径
+
+        关于 expanduser 方法的说明，可执行 help(Path.expanduser) 查看帮助
+        expanduser() method of pathlib.PosixPath instance
+        Return a new path with expanded ~ and ~user constructs
+        (as returned by os.path.expanduser)
+        """
+        self.assertEqual('/Users/ktgu/.ssh', Path('~/.ssh').expanduser())
+
+    def test_iter_dirs(self):
+        """遍历指定目录下的所有文件及目录"""
+        for path in Path.home().iterdir():
+            print(path)
+
+        # Path.home().iterdir() 是一个 collections.generator
+        self.assertIs(collections.generator, type(Path.home().iterdir()))
+
+    def test_get_file_suffix(self):
+        """获取文件后缀名（扩展名）
+        """
+        # suffix 属性返回最后一个.的扩展名
+        self.assertEqual('.gz', Path('1.tar.gz').suffix)
+        # suffixes 属性返回多个扩展名列表
+        self.assertEqual(['.tar', '.gz'], Path('1.tar.gz').suffixes)
+
+        # with_suffix 可以修改后缀名，返回一个新实例，不影响原实例后缀名
+        p1 = Path('1.md')
+
+    def test_change_file_name_or_suffix(self):
+        """测试更改文件名或扩展名
+        """
+        p1 = Path('1.md')
+        p2 = p1.with_suffix('.txt')
+
+        self.assertNotEqual(p1, p2)
+        print(repr(p1), repr(p2))  # Output: PosixPath('1.md') PosixPath('1.txt')
+
+        # 修改文件名（不包含扩展名）
+        p3 = p1.with_stem('foo')
+        self.assertEqual('foo.md', str(p3))
+
+        # 和 with_suffix 相对的是 with_name, 用以修改文件名
+        p4 = p1.with_name('bar')
+        self.assertEqual('bar', str(p4))
+
+    def test_get_part_of_path(self):
+        """取路径的各个部分
+
+
+        本测试用例将用到以下属性：
+        name: 获取目录或文件名（包括扩展名）
+        suffix: 获取最后一个后缀名，如 1.tar.gz 返回 .gz
+        suffixes: 获取所有后缀名 list，如 1.tar.gz 返回 ['.tar', '.gz']
+        stem: 获取除最后一个后缀名以外的文件名部分，如 1.tar.gz 返回 1.tar
+        parent: 获取 stem 父路径
+        parents: 返回一个类似序列的对象 <class 'pathlib._PathParents'>，通过它可以迭代所有前置路径
+        """
+        # 创建一个 Path 实例，此处使用绝对路径方便后面解释 parent 和 parents 属性
+        p = Path('1.tar.gz').absolute()
+        self.assertEqual('/Users/ktgu/workspace/projects/python-demos/1.tar.gz', str(p))
+
+        # 获取目录或文件名(包括扩展名）
+        self.assertEqual('1.tar.gz', p.name)
+        # 获取不带扩展名的文件或目录名
+        self.assertEqual('1.tar', p.stem)
+        # 获取最后一个.表明的扩展名，此处输出.gz
+        self.assertEqual('.gz', p.suffix)
+        # 如果类似像 1.tar.gz 这种有两个点分隔的，该属性会返回一个扩展名列表
+        self.assertEqual( ['.tar', '.gz'], p.suffixes)
+
+        # 获取父路径
+        self.assertEqual('/Users/ktgu/workspace/projects/python-demos', str(p.parent))
+
+        # 遍历 parents
+        # Output：
+        # /Users/ktgu/workspace/projects/python-demos
+        # /Users/ktgu/workspace/projects
+        # /Users/ktgu/workspace
+        # /Users/ktgu
+        # /Users
+        # /
+        for path in p.parents:
+            print(path)
+
+    def test_path_exists(self):
+        """测试路径是否存在
+        """
+        p1 = Path('1.md')
+
+        # 断言：路径是否存在
+        self.assertTrue(p1.exists())
+        self.assertTrue(os.path.exists('1.md'))
+
+    def test_path_is_file_or_dir(self):
+        """测试路径是否是文件或目录
+        """
+        p1 = Path('1.md')
+
+        # 断言：是一个文件
+        self.assertTrue(Path('1.md').is_file())
+        self.assertTrue(os.path.isfile('1.md'))
+
+        # 断言：不是文件夹
+        self.assertFalse(p1.is_dir())
+        self.assertFalse(os.path.isdir('1.md'))
+
+    def test_path_join(self):
+        # 使用 pathlib.Path
+        path1 = Path('/usr', 'local', 'bin')
+        self.assertEqual('/usr/local/bin', str(path1))
+
+        path2 = os.path.join('/usr', 'local', 'bin')
+        self.assertEqual('/usr/local/bin', path2)
+
+    def test_fifo_file(self):
+        # TODO
+        pass
+
+    def test_mkdir_or_create_new_file(self):
+        # TODO
+        # 创建一个新文件
+        Path('2.md').touch()
+
+    def test_as_file_url(self):
+        """测试将路径返回为 'file' URI（file://...的形式）
+        """
+        p1 = Path('1.md')
+        # as_uri 只能在绝对路径上调用，否则会发生 ValueError
+        # ValueError: relative path can't be expressed as a file URI
+        with self.assertRaises(ValueError):
+            print(p1.as_uri())
+        # 只有绝对路径才可以转换为 file URI
+        self.assertEqual('file:///Users/ktgu/workspace/projects/python-demos/1.md', p1.absolute().as_uri())
+
+    def test_file_commons(self):
+        file_name = '1.md'
+        p1 = Path(file_name)
+
+        # TODO
+
+        # 是否是块设备
+        p1.is_block_device()
+        # 是否是字符设备
+        p1.is_char_device()
+        # 是否是 FIFO 管道文件
+        p1.is_fifo()
+        # 是否是软连接
+        p1.is_symlink()
+        # 是否是socket文件
+        p1.is_socket()
+        # 是否是绝对路径
+        p1.is_absolute()
+        # 是否是挂载点
+        p1.is_mount()
+
+        # path.chmod(777)
+        # path.is_relative_to()
+        p1.is_reserved()
+        p1.anchor
+        p1.drive
+        p1.open()
+        p1.root()
+        p1.stat()
+        p1.with_stem()
+        # os.stat_result(st_mode=33188, st_ino=8722088793, st_dev=16777220, st_nlink=1, st_uid=501, st_gid=20, st_size=11,
+        #                st_atime=1638094154, st_mtime=1638094151, st_ctime=1638094151)
 
 
 if __name__ == '__main__':
